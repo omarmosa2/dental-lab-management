@@ -1,0 +1,61 @@
+directories:
+  output: dist-electron
+  buildResources: build
+appId: com.ORalSoft
+productName: AgorraLab
+files:
+  - filter:
+      - dist/**/*
+      - electron/**/*
+      - src/**/*
+      - assets/**/*
+      - installer/**/*
+      - node_modules/**/*
+      - package.json
+extraResources:
+  - from: installer
+    to: installer
+  - from: assets
+    to: assets
+asarUnpack:
+  - '**/sql-wasm.wasm'
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+  requestedExecutionLevel: asInvoker
+  forceCodeSigning: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  perMachine: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: AgorraLab
+  language: '1033'
+  displayLanguageSelector: false
+  multiLanguageInstaller: false
+  license: installer/license-en.txt
+  artifactName: AgorraLab-v${version}-Setup.${ext}
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+  menuCategory: Healthcare
+  warningsAsErrors: false
+  unicode: true
+  guid: AgorraLab-v1.0
+mac:
+  target: dmg
+  icon: installer/icon.icns
+  category: public.app-category.healthcare-fitness
+linux:
+  target: AppImage
+  icon: installer/icon.png
+  category: Office
+publish: null
+electronVersion: 39.1.1

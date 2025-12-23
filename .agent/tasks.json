@@ -1,0 +1,14 @@
+[
+  {
+    "task": "Create .augment/rules files",
+    "status": "pending"
+  },
+  {
+    "task": "Create .agent folder and resources",
+    "status": "pending"
+  },
+  {
+    "task": "Bootstrap project scaffold",
+    "status": "pending"
+  }
+]
