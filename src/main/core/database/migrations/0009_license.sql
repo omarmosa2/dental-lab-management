@@ -1,19 +1,12 @@
--- License Management Table
+-- PIN-based License Management Table
 -- Created: 2025-01-11
+-- Updated: 2025-01-23 - Simplified to PIN-based system
 -- Version: 0009
 
--- License table
+-- License table - Single row with id=1
 CREATE TABLE IF NOT EXISTS license (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  hardware_id TEXT NOT NULL UNIQUE,
-  license_key TEXT NOT NULL UNIQUE,
+  id INTEGER PRIMARY KEY,
+  license_key TEXT NOT NULL,
   activated_at INTEGER NOT NULL,
-  is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
-  created_at INTEGER DEFAULT (strftime('%s', 'now')),
-  updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1))
 );
-
--- Create index for faster lookups
-CREATE INDEX IF NOT EXISTS idx_license_hardware_id ON license(hardware_id);
-CREATE INDEX IF NOT EXISTS idx_license_key ON license(license_key);
-

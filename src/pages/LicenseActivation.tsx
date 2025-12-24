@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Key, 
-  Copy, 
   CheckCircle, 
   AlertCircle, 
   Loader2,
   Shield,
-  Mail,
-  Smartphone
+  Copy,
+  Cpu
 } from 'lucide-react';
 import { useToast } from '../renderer/hooks/useToast';
 
@@ -16,25 +15,38 @@ export default function LicenseActivation() {
   const navigate = useNavigate();
   const { success, error: showError } = useToast();
   
+  const [activationKey, setActivationKey] = useState('');
   const [hardwareId, setHardwareId] = useState<string>('');
-  const [licenseKey, setLicenseKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [copied, setCopied] = useState(false);
   const [isActivated, setIsActivated] = useState(false);
+  const [loadingHardwareId, setLoadingHardwareId] = useState(true);
 
   useEffect(() => {
     checkLicenseStatus();
-    loadHardwareId();
+    fetchHardwareId();
   }, []);
+
+  const fetchHardwareId = async () => {
+    try {
+      setLoadingHardwareId(true);
+      const result = await window.licenseApi.getHardwareId();
+      
+      if (result.ok && result.data) {
+        setHardwareId(result.data);
+      }
+    } catch (err) {
+      console.error('Failed to get hardware ID:', err);
+      showError('فشل الحصول على معرف الجهاز');
+    } finally {
+      setLoadingHardwareId(false);
+    }
+  };
 
   const checkLicenseStatus = async () => {
     try {
       setChecking(true);
-      const licenseApi = await import('../renderer/utils/waitForLicenseApi').then(m => m.waitForLicenseApi()).catch(() => null);
-      if (!licenseApi) throw new Error('licenseApi not available');
-
-      const result = await licenseApi.isActivated();
+      const result = await window.licenseApi.isActivated();
       
       if (result.ok && result.data) {
         setIsActivated(true);
@@ -53,41 +65,22 @@ export default function LicenseActivation() {
     }
   };
 
-  const loadHardwareId = async () => {
-    try {
-      const licenseApi = await import('../renderer/utils/waitForLicenseApi').then(m => m.waitForLicenseApi()).catch(() => null);
-      if (!licenseApi) throw new Error('licenseApi not available');
-
-      const result = await licenseApi.getHardwareId();
-      if (result.ok && result.data) {
-        setHardwareId(result.data);
-      }
-    } catch (err) {
-      console.error('Failed to load hardware ID:', err);
-    }
-  };
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(hardwareId);
-      setCopied(true);
+  const handleCopyHardwareId = () => {
+    if (hardwareId) {
+      navigator.clipboard.writeText(hardwareId);
       success('تم نسخ معرف الجهاز');
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-      showError('فشل نسخ المعرف');
     }
   };
 
   const handleActivate = async () => {
-    if (!licenseKey.trim()) {
-      showError('يرجى إدخال كود التفعيل');
+    if (!activationKey.trim()) {
+      showError('يرجى إدخال مفتاح التفعيل');
       return;
     }
 
     try {
       setLoading(true);
-      const result = await window.licenseApi.activate(licenseKey.trim());
+      const result = await window.licenseApi.activate(activationKey.trim());
       
       if (result.ok) {
         success('تم تفعيل التطبيق بنجاح!');
@@ -137,90 +130,104 @@ export default function LicenseActivation() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50 dark:from-neutral-900 dark:via-neutral-800 dark:to-neutral-900 p-4">
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-xl">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-theme-primary/10 mb-4">
             <Shield className="w-10 h-10 text-theme-primary" />
           </div>
-          <h1 className="text-4xl font-bold text-neutral-900 dark:text-white mb-2">
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white mb-2">
             تفعيل التطبيق
           </h1>
-          <p className="text-lg text-neutral-600 dark:text-neutral-400">
-            يرجى إدخال كود التفعيل لاستخدام التطبيق
+          <p className="text-base text-neutral-600 dark:text-neutral-400">
+            يرجى إدخال مفتاح التفعيل الخاص بهذا الجهاز
           </p>
         </div>
 
         {/* Card */}
         <div className="card shadow-2xl">
           {/* Hardware ID Section */}
-          <div className="mb-8">
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
-              <Smartphone className="w-4 h-4 inline-block ml-2" />
-              معرف الجهاز (Hardware ID)
-            </label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
-                <code className="text-sm font-mono text-neutral-900 dark:text-neutral-100 break-all">
-                  {hardwareId || 'جارٍ التحميل...'}
-                </code>
+          <div className="mb-6">
+            <div className="p-4 bg-warning-50 dark:bg-warning-900/20 border-2 border-warning-300 dark:border-warning-700 rounded-lg">
+              <div className="flex items-start gap-3 mb-3">
+                <Cpu className="w-5 h-5 text-warning-600 dark:text-warning-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-warning-900 dark:text-warning-100 mb-1">
+                    معرف الجهاز (Hardware ID)
+                  </p>
+                  <p className="text-sm text-warning-800 dark:text-warning-200 mb-2">
+                    قم بنسخ معرف الجهاز وإرساله للحصول على مفتاح التفعيل
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={copyToClipboard}
-                className="btn-base btn-outline px-4 py-4 flex-shrink-0"
-                title="نسخ المعرف"
-              >
-                {copied ? (
-                  <CheckCircle className="w-5 h-5 text-success-600" />
-                ) : (
-                  <Copy className="w-5 h-5" />
-                )}
-              </button>
+              
+              {loadingHardwareId ? (
+                <div className="flex items-center justify-center p-3 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700">
+                  <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
+                  <span className="mr-2 text-sm text-neutral-500">جارٍ الحصول على معرف الجهاز...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 p-3 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 font-mono text-sm break-all">
+                    {hardwareId || 'غير متاح'}
+                  </div>
+                  <button
+                    onClick={handleCopyHardwareId}
+                    className="btn-base btn-secondary px-4 py-3 flex-shrink-0"
+                    title="نسخ معرف الجهاز"
+                  >
+                    <Copy className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="mt-3 p-4 bg-info-50 dark:bg-info-900/20 border border-info-200 dark:border-info-800 rounded-lg">
+          </div>
+
+          {/* Info Section */}
+          <div className="mb-6">
+            <div className="p-4 bg-info-50 dark:bg-info-900/20 border border-info-200 dark:border-info-800 rounded-lg">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-info-600 dark:text-info-400 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-info-800 dark:text-info-200">
-                  <p className="font-medium mb-1">خطوات التفعيل:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-right">
-                    <li>انسخ معرف الجهاز أعلاه</li>
-                    <li>أرسل المعرف للمطور عبر البريد الإلكتروني أو WhatsApp</li>
-                    <li>ستحصل على كود تفعيل خاص بجهازك</li>
-                    <li>أدخل كود التفعيل في الحقل أدناه</li>
-                  </ol>
+                  <p className="font-medium mb-1">معلومات هامة:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>كل مفتاح تفعيل مرتبط بجهاز واحد فقط</li>
+                    <li>لا يمكن استخدام نفس المفتاح على جهاز آخر</li>
+                    <li>احتفظ بمفتاح التفعيل في مكان آمن</li>
+                  </ul>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* License Key Input */}
+          {/* Activation Key Input */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
               <Key className="w-4 h-4 inline-block ml-2" />
-              كود التفعيل
+              مفتاح التفعيل (Activation Key)
             </label>
             <input
               type="text"
-              value={licenseKey}
-              onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
-              placeholder="LICENSE-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
-              className="input-base w-full text-center text-lg font-mono tracking-wider"
-              disabled={loading}
+              value={activationKey}
+              onChange={(e) => setActivationKey(e.target.value.toUpperCase())}
+              placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+              className="input-base w-full text-center text-sm font-mono tracking-wide"
+              disabled={loading || loadingHardwareId}
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && !loading) {
+                if (e.key === 'Enter' && !loading && !loadingHardwareId) {
                   handleActivate();
                 }
               }}
             />
             <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 text-center">
-              أدخل كود التفعيل الذي حصلت عليه من المطور
+              أدخل مفتاح التفعيل الخاص بهذا الجهاز فقط
             </p>
           </div>
 
           {/* Activate Button */}
           <button
             onClick={handleActivate}
-            disabled={loading || !licenseKey.trim()}
+            disabled={loading || !activationKey.trim() || loadingHardwareId}
             className="w-full btn-base btn-primary py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
@@ -235,14 +242,6 @@ export default function LicenseActivation() {
               </>
             )}
           </button>
-
-          {/* Contact Info */}
-          <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-700">
-            <div className="flex items-center justify-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-              <Mail className="w-4 h-4" />
-              <span>للحصول على كود التفعيل، تواصل مع المطور</span>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
@@ -255,4 +254,3 @@ export default function LicenseActivation() {
     </div>
   );
 }
-

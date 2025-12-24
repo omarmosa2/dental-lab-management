@@ -88,8 +88,7 @@ declare global {
       getHardwareId: () => Promise<ApiResponse<string>>;
       getInfo: () => Promise<ApiResponse<LicenseInfo>>;
       isActivated: () => Promise<ApiResponse<boolean>>;
-      activate: (licenseKey: string) => Promise<ApiResponse<{ success: boolean }>>;
-      generateKey: (hardwareId: string) => Promise<ApiResponse<string>>;
+      activate: (activationKey: string) => Promise<ApiResponse<{ success: boolean }>>;
       deactivate: () => Promise<ApiResponse<{ success: boolean }>>;
     };
     printApi: {

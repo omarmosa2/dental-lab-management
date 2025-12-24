@@ -15,10 +15,9 @@
     "electron": "electron .",
     "electron:build": "npm run build && electron .",
     "rebuild": "npx @electron/rebuild -f -w",
-    "postinstall": "electron-builder install-app-deps",
     "test": "echo \"No tests specified\"",
     "install-deps": "npm install vite @vitejs/plugin-react react react-dom typescript",
-"prepare:icons": "node scripts/fix-assets-icon.js",
+    "prepare:icons": "node scripts/fix-assets-icon.js",
     "dist": "npm run prepare:icons && cross-env NODE_ENV=production npm run build && electron-builder",
     "dist:win": "npm run prepare:icons && rimraf dist-electron && cross-env NODE_ENV=production npm run build && electron-builder --win --x64 --publish never",
     "dist:mac": "npm run prepare:icons && rimraf dist-electron && cross-env NODE_ENV=production npm run build && electron-builder --mac",
@@ -47,6 +46,8 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/electron": "^1.4.38",
+    "@types/node": "^20.19.27",
     "@types/pdfkit": "^0.17.3",
     "@types/pino": "^7.0.4",
     "@types/qrcode": "^1.5.6",
@@ -56,31 +57,31 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vercel/webpack-asset-relocator-loader": "^1.7.3",
+    "@vitejs/plugin-react": "^4.1.1",
     "@vitest/ui": "^4.0.8",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
     "copy-webpack-plugin": "^13.0.1",
+    "cross-env": "^7.0.3",
     "css-loader": "^6.11.0",
     "electron": "39.1.1",
     "electron-builder": "^26.0.12",
-    "concurrently": "^9.1.2",
-    "cross-env": "^7.0.3",
-    "@vitejs/plugin-react": "^4.1.1",
-    "vite": "^4.5.0",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "fork-ts-checker-webpack-plugin": "^7.3.0",
     "jsdom": "^27.2.0",
     "node-loader": "^2.1.0",
     "postcss": "^8.5.6",
+    "rimraf": "^5.0.10",
     "style-loader": "^3.3.4",
     "tailwindcss": "^3.4.18",
     "ts-loader": "^9.5.4",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.8",
-    "webpack-cli": "^6.0.1",
-    "webpack": "^5.88.2",
     "ts-node": "^10.9.1",
-    "rimraf": "^5.0.0"
+    "typescript": "^5.9.3",
+    "vite": "^4.5.0",
+    "vitest": "^4.0.8",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^6.0.1"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
@@ -130,7 +131,9 @@
         "to": "assets"
       }
     ],
-    "asarUnpack": ["**/sql-wasm.wasm"],
+    "asarUnpack": [
+      "**/sql-wasm.wasm"
+    ],
     "win": {
       "target": [
         {

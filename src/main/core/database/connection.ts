@@ -35,15 +35,21 @@ export async function initDatabase(): Promise<Database> {
         locateFile: (file: string) => {
           // Candidate paths (dev / packaged / unpacked)
           const candidates = [
-            path.join(__dirname, file), // dev or when wasm is next to compiled file
-            path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'main', 'core', 'database', file), // unpacked location
+            // Development mode - node_modules
+            path.join(__dirname, '../../../node_modules/sql.js/dist', file),
+            path.join(process.cwd(), 'node_modules/sql.js/dist', file),
+            // Compiled dev mode
+            path.join(__dirname, file),
+            // Production - packaged
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'main', 'core', 'database', file),
             path.join(process.resourcesPath, 'electron', 'main', 'core', 'database', file),
-            path.join(process.resourcesPath, file), // extraResources root
+            path.join(process.resourcesPath, file),
           ];
 
           for (const p of candidates) {
             try {
               if (fs.existsSync(p)) {
+                log.info(`Found WASM file at: ${p}`);
                 return p;
               }
             } catch (e) {
@@ -51,8 +57,10 @@ export async function initDatabase(): Promise<Database> {
             }
           }
 
-          // Fallback to __dirname
-          return path.join(__dirname, file);
+          // Fallback - try node_modules directly
+          const fallback = require.resolve('sql.js/dist/' + file);
+          log.warn(`Using fallback WASM path: ${fallback}`);
+          return fallback;
         }
       });
     }

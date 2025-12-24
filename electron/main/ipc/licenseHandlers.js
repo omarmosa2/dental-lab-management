@@ -1,16 +1,15 @@
 "use strict";
 // licenseHandlers.ts
-// IPC handlers for license management
-// Created: 2025-01-11
+// IPC handlers for hardware-bound license management
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerLicenseHandlers = registerLicenseHandlers;
 const electron_1 = require("electron");
-const LicenseService_1 = require("../core/services/LicenseService");
+const HardwareLicenseService_1 = require("../core/services/HardwareLicenseService");
 const electron_log_1 = __importDefault(require("electron-log"));
-const licenseService = (0, LicenseService_1.getLicenseService)();
+const licenseService = (0, HardwareLicenseService_1.getHardwareLicenseService)();
 // Helper to wrap handlers with error handling
 function wrapHandler(handler) {
     try {
@@ -63,16 +62,20 @@ function registerLicenseHandlers() {
         return wrapHandler(() => {
             const isActivated = licenseService.isLicenseActivated();
             const info = licenseService.getLicenseInfo();
-            electron_log_1.default.info('License check result:', { isActivated, hardwareId: info.hardwareId, hasKey: !!info.licenseKey });
+            electron_log_1.default.info('License check result:', {
+                isActivated,
+                hardwareId: info.hardwareId,
+                hasKey: !!info.licenseKey
+            });
             return isActivated;
         });
     });
-    // Activate license
-    electron_1.ipcMain.handle('license:activate', async (_, licenseKey) => {
-        electron_log_1.default.info('IPC: license:activate', { licenseKey: licenseKey.substring(0, 15) + '...' });
+    // Activate license with activation key
+    electron_1.ipcMain.handle('license:activate', async (_, activationKey) => {
+        electron_log_1.default.info('IPC: license:activate', { keyLength: activationKey?.length });
         return wrapHandler(async () => {
-            // Activate license
-            licenseService.activateLicense(licenseKey);
+            // Activate license with activation key
+            licenseService.activateLicense(activationKey);
             // Wait a moment for filesystem operations to complete
             await new Promise(resolve => setTimeout(resolve, 200));
             // Double-check activation status
@@ -87,13 +90,6 @@ function registerLicenseHandlers() {
             return { success: true };
         });
     });
-    // Generate license key (for developer/admin use)
-    electron_1.ipcMain.handle('license:generateKey', async (_, hardwareId) => {
-        electron_log_1.default.info('IPC: license:generateKey');
-        return wrapHandler(() => {
-            return licenseService.generateLicenseKey(hardwareId);
-        });
-    });
     // Deactivate license (for testing/admin purposes)
     electron_1.ipcMain.handle('license:deactivate', async () => {
         electron_log_1.default.info('IPC: license:deactivate');
@@ -102,5 +98,5 @@ function registerLicenseHandlers() {
             return { success: true };
         });
     });
-    electron_log_1.default.info('License IPC handlers registered');
+    electron_log_1.default.info('Hardware-bound License IPC handlers registered');
 }

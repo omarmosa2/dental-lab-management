@@ -67,7 +67,8 @@ class WhatsAppService {
         this.statusListeners = new Set();
         this.isManualDisconnect = false;
         this.repository = new WhatsAppRepository_1.WhatsAppRepository();
-        this.authFolder = (0, path_1.join)(electron_1.app.getPath('userData'), 'whatsapp-auth');
+        // Delay authFolder initialization until app is ready
+        this.authFolder = '';
         this.logger = (0, pino_1.default)({ level: 'silent' }); // Silent in production, change to 'info' for debugging
         this.connectionManager = new WhatsAppConnectionManager_1.WhatsAppConnectionManager(this.logger, {
             maxAttempts: 5,
@@ -88,10 +89,19 @@ class WhatsAppService {
     }
     // ==================== Connection Management ====================
     /**
+     * Initialize auth folder path (must be called after app is ready)
+     */
+    initAuthFolder() {
+        if (!this.authFolder) {
+            this.authFolder = (0, path_1.join)(electron_1.app.getPath('userData'), 'whatsapp-auth');
+        }
+    }
+    /**
      * Initialize WhatsApp connection on app startup
      * This will automatically restore the session if auth files exist
      */
     async initialize() {
+        this.initAuthFolder();
         console.log('WhatsApp: Initializing...');
         try {
             // Check if we have saved auth state
@@ -305,6 +315,7 @@ class WhatsAppService {
         }
     }
     async clearAuthFolder() {
+        this.initAuthFolder();
         try {
             const fs = await Promise.resolve().then(() => __importStar(require('fs/promises')));
             const path = await Promise.resolve().then(() => __importStar(require('path')));

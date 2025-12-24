@@ -1,13 +1,12 @@
 // licenseHandlers.ts
-// IPC handlers for license management
-// Created: 2025-01-11
+// IPC handlers for hardware-bound license management
 
 import { ipcMain } from 'electron';
-import { getLicenseService } from '../core/services/LicenseService';
+import { getHardwareLicenseService } from '../core/services/HardwareLicenseService';
 import type { ApiResponse } from '../../shared/types/api.types';
 import log from 'electron-log';
 
-const licenseService = getLicenseService();
+const licenseService = getHardwareLicenseService();
 
 // Helper to wrap handlers with error handling
 function wrapHandler<T>(
@@ -65,17 +64,21 @@ export function registerLicenseHandlers() {
     return wrapHandler(() => {
       const isActivated = licenseService.isLicenseActivated();
       const info = licenseService.getLicenseInfo();
-      log.info('License check result:', { isActivated, hardwareId: info.hardwareId, hasKey: !!info.licenseKey });
+      log.info('License check result:', { 
+        isActivated, 
+        hardwareId: info.hardwareId,
+        hasKey: !!info.licenseKey 
+      });
       return isActivated;
     });
   });
 
-  // Activate license
-  ipcMain.handle('license:activate', async (_, licenseKey: string) => {
-    log.info('IPC: license:activate', { licenseKey: licenseKey.substring(0, 15) + '...' });
+  // Activate license with activation key
+  ipcMain.handle('license:activate', async (_, activationKey: string) => {
+    log.info('IPC: license:activate', { keyLength: activationKey?.length });
     return wrapHandler(async () => {
-      // Activate license
-      licenseService.activateLicense(licenseKey);
+      // Activate license with activation key
+      licenseService.activateLicense(activationKey);
       
       // Wait a moment for filesystem operations to complete
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -96,14 +99,6 @@ export function registerLicenseHandlers() {
     });
   });
 
-  // Generate license key (for developer/admin use)
-  ipcMain.handle('license:generateKey', async (_, hardwareId: string) => {
-    log.info('IPC: license:generateKey');
-    return wrapHandler(() => {
-      return licenseService.generateLicenseKey(hardwareId);
-    });
-  });
-
   // Deactivate license (for testing/admin purposes)
   ipcMain.handle('license:deactivate', async () => {
     log.info('IPC: license:deactivate');
@@ -113,6 +108,5 @@ export function registerLicenseHandlers() {
     });
   });
 
-  log.info('License IPC handlers registered');
+  log.info('Hardware-bound License IPC handlers registered');
 }
-

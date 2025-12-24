@@ -18,14 +18,7 @@ export default function LicenseGuard({ children }: LicenseGuardProps) {
 
   const checkLicense = async () => {
     try {
-      // Wait for the preload API to be available (prevents "undefined" errors)
-      const licenseApi = await import('../renderer/utils/waitForLicenseApi').then(m => m.waitForLicenseApi()).catch(() => null);
-
-      if (!licenseApi) {
-        throw new Error('licenseApi not available');
-      }
-
-      const result = await licenseApi.isActivated();
+      const result = await window.licenseApi.isActivated();
 
       if (result.ok && result.data) {
         setIsActivated(true);
@@ -60,4 +53,3 @@ export default function LicenseGuard({ children }: LicenseGuardProps) {
 
   return <>{children}</>;
 }
-

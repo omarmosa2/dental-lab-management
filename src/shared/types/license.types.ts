@@ -1,19 +1,18 @@
-// License Types
-// Created: 2025-01-11
+// Hardware-Bound License Types
+// Updated: 2025-01-23
 
 export interface LicenseInfo {
-  hardwareId: string;
   isActivated: boolean;
+  hardwareId: string;
   activatedAt?: number;
   licenseKey?: string;
 }
 
 export interface LicenseActivationRequest {
-  licenseKey: string;
+  activationKey: string;
 }
 
 export interface LicenseActivationResponse {
   success: boolean;
   message?: string;
 }
-
