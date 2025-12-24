@@ -1,62 +1,98 @@
 /**
- * License Key Generator Script
- * Usage: node scripts/generate-license.js <hardware-id>
+ * License Key Generator Script for Simple License System
+ * Usage: node scripts/generate-license.js <machine-guid>
  * 
- * This script generates a license key for a given hardware ID.
- * It uses the same algorithm as LicenseService.
+ * This script generates a license key for a given Windows Machine GUID.
+ * The algorithm MUST match SimpleLicenseService.ts exactly.
+ * 
+ * ⚠️ IMPORTANT: This file uses the SAME algorithm as SimpleLicenseService.ts
  */
 
 const crypto = require('crypto');
 
-// Secret key - MUST match the one in LicenseService
-// In production, this should be stored securely
-const SECRET_KEY = process.env.LICENSE_SECRET_KEY || 'dental-lab-license-secret-key-2025-change-in-production';
+// ✅ Secret key - MUST match the one in SimpleLicenseService.ts EXACTLY
+const SECRET_KEY = 'DENTAL_LAB_2025_SECRET_KEY_CHANGE_IN_PRODUCTION';
 
-function generateLicenseKey(hardwareId) {
-  if (!hardwareId || hardwareId.length < 20) {
-    throw new Error('Invalid hardware ID');
+/**
+ * Generate license key using HMAC-SHA256
+ * This matches the algorithm in SimpleLicenseService.verifyLicenseKey()
+ */
+function generateLicenseKey(machineId) {
+  if (!machineId || machineId.trim().length < 10) {
+    throw new Error('Invalid Machine GUID');
   }
 
-  // Create a signature using the hardware ID and secret key
-  const data = `${hardwareId}-${SECRET_KEY}`;
-  const signature = crypto
-    .createHash('sha256')
-    .update(data)
-    .digest('hex')
-    .substring(0, 24)
-    .toUpperCase();
+  // Normalize machine ID (same as service)
+  const normalizedMachineId = machineId.trim().toUpperCase();
 
-  // Format as LICENSE-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
-  const formattedKey = `LICENSE-${signature.match(/.{1,4}/g).join('-')}`;
+  // ✅ Generate signature using HMAC-SHA256 (same as SimpleLicenseService)
+  const hmac = crypto.createHmac('sha256', SECRET_KEY);
+  hmac.update(normalizedMachineId);
+  const signature = hmac.digest('hex');
+  
+  // ✅ Take first 32 characters (same as SimpleLicenseService)
+  const licenseKey = signature.substring(0, 32).toUpperCase();
+  
+  // ✅ Format as XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+  const formattedKey = licenseKey.match(/.{1,4}/g).join('-');
   
   return formattedKey;
 }
 
-// Get hardware ID from command line arguments
-const hardwareId = process.argv[2];
+/**
+ * Verify that a license key is valid for a machine ID
+ * This is for testing purposes
+ */
+function verifyLicenseKey(licenseKey, machineId) {
+  const normalizedKey = licenseKey.replace(/-/g, '').trim().toUpperCase();
+  const expectedKey = generateLicenseKey(machineId).replace(/-/g, '');
+  return normalizedKey === expectedKey;
+}
 
-if (!hardwareId) {
-  console.error('❌ Error: Hardware ID is required');
-  console.log('\nUsage:');
-  console.log('  node scripts/generate-license.js <hardware-id>');
-  console.log('\nExample:');
-  console.log('  node scripts/generate-license.js ABCD-1234-EFGH-5678-IJKL-9012-MNOP-3456');
+// Get machine ID from command line arguments
+const machineId = process.argv[2];
+
+if (!machineId) {
+  console.error('❌ Error: Machine GUID is required');
+  console.log('\n📖 Usage:');
+  console.log('  node scripts/generate-license.js <machine-guid>');
+  console.log('\n📝 Example:');
+  console.log('  node scripts/generate-license.js 12345678-90AB-CDEF-1234-567890ABCDEF');
+  console.log('\n💡 To get Machine GUID on Windows:');
+  console.log('  reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid');
   process.exit(1);
 }
 
 try {
-  const licenseKey = generateLicenseKey(hardwareId);
+  const licenseKey = generateLicenseKey(machineId);
   
   console.log('\n✅ License Key Generated Successfully!\n');
-  console.log('Hardware ID:');
-  console.log(`  ${hardwareId}\n`);
-  console.log('License Key:');
-  console.log(`  ${licenseKey}\n`);
-  console.log('─'.repeat(50));
-  console.log('Send this license key to the customer.');
-  console.log('─'.repeat(50));
+  console.log('═'.repeat(60));
+  console.log('Machine GUID (Input):');
+  console.log(`  ${machineId.toUpperCase()}`);
+  console.log('\nGenerated License Key:');
+  console.log(`  ${licenseKey}`);
+  console.log('═'.repeat(60));
+  console.log('\n📋 Instructions:');
+  console.log('  1. Copy the license key above');
+  console.log('  2. Send it to the customer');
+  console.log('  3. Customer enters it in the activation screen');
+  console.log('  4. License will be bound to this machine only');
+  console.log('\n⚠️  Important Notes:');
+  console.log('  - This key works ONLY on the machine with this GUID');
+  console.log('  - Each machine needs its own unique key');
+  console.log('  - Keep a record of: Machine GUID → License Key → Customer');
+  console.log('═'.repeat(60));
+  
+  // Self-test verification
+  const isValid = verifyLicenseKey(licenseKey, machineId);
+  console.log(`\n🧪 Self-Test: ${isValid ? '✅ PASSED' : '❌ FAILED'}`);
+  if (!isValid) {
+    console.error('\n⚠️  WARNING: Self-verification failed! Algorithm mismatch detected.');
+    process.exit(1);
+  }
+  console.log('');
 } catch (error) {
-  console.error('❌ Error generating license key:', error.message);
+  console.error('\n❌ Error generating license key:', error.message);
   process.exit(1);
 }
-

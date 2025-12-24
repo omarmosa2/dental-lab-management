@@ -1,12 +1,12 @@
 // licenseHandlers.ts
-// IPC handlers for hardware-bound license management
+// IPC handlers for simple license management
 
 import { ipcMain } from 'electron';
-import { getHardwareLicenseService } from '../core/services/HardwareLicenseService';
+import { getSimpleLicenseService } from '../core/services/SimpleLicenseService';
 import type { ApiResponse } from '../../shared/types/api.types';
 import log from 'electron-log';
 
-const licenseService = getHardwareLicenseService();
+const licenseService = getSimpleLicenseService();
 
 // Helper to wrap handlers with error handling
 function wrapHandler<T>(
@@ -42,11 +42,11 @@ function wrapHandler<T>(
 }
 
 export function registerLicenseHandlers() {
-  // Get hardware ID
-  ipcMain.handle('license:getHardwareId', async () => {
-    log.info('IPC: license:getHardwareId');
+  // Get machine ID
+  ipcMain.handle('license:getMachineId', async () => {
+    log.info('IPC: license:getMachineId');
     return wrapHandler(() => {
-      return licenseService.getHardwareId();
+      return licenseService.getMachineId();
     });
   });
 
@@ -66,34 +66,51 @@ export function registerLicenseHandlers() {
       const info = licenseService.getLicenseInfo();
       log.info('License check result:', { 
         isActivated, 
-        hardwareId: info.hardwareId,
+        machineId: info.machineId,
         hasKey: !!info.licenseKey 
       });
       return isActivated;
     });
   });
 
-  // Activate license with activation key
-  ipcMain.handle('license:activate', async (_, activationKey: string) => {
-    log.info('IPC: license:activate', { keyLength: activationKey?.length });
+  // Activate license with license key
+  ipcMain.handle('license:activate', async (_, licenseKey: string) => {
+    log.info('IPC: license:activate', { keyLength: licenseKey?.length });
     return wrapHandler(async () => {
-      // Activate license with activation key
-      licenseService.activateLicense(activationKey);
+      log.info('========== LICENSE ACTIVATION START ==========');
       
-      // Wait a moment for filesystem operations to complete
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Activate license (includes saves and verification)
+      licenseService.activateLicense(licenseKey);
+      log.info('License service activation completed');
       
-      // Double-check activation status
-      const isActivated = licenseService.isLicenseActivated();
-      log.info('License activation verification:', { isActivated });
+      // Wait for filesystem sync
+      log.info('Waiting 500ms for filesystem sync...');
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Get full license info for debugging
-      const licenseInfo = licenseService.getLicenseInfo();
-      log.info('License info after activation:', licenseInfo);
+      // First verification check
+      log.info('Running first verification check...');
+      let isActivated = licenseService.isLicenseActivated();
+      let licenseInfo = licenseService.getLicenseInfo();
+      log.info('First verification result:', { isActivated, info: licenseInfo });
       
       if (!isActivated) {
-        throw new Error('License activation failed - verification check returned false');
+        // Wait and try one more time
+        log.warn('First verification failed, waiting 300ms and retrying...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        isActivated = licenseService.isLicenseActivated();
+        licenseInfo = licenseService.getLicenseInfo();
+        log.info('Second verification result:', { isActivated, info: licenseInfo });
       }
+      
+      if (!isActivated) {
+        log.error('========== LICENSE ACTIVATION FAILED ==========');
+        log.error('Final license info:', licenseInfo);
+        throw new Error('فشل التحقق من تفعيل الترخيص - يرجى المحاولة مرة أخرى أو الاتصال بالدعم');
+      }
+      
+      log.info('========== LICENSE ACTIVATION SUCCESS ==========');
+      log.info('Final license info:', licenseInfo);
       
       return { success: true };
     });
@@ -108,5 +125,5 @@ export function registerLicenseHandlers() {
     });
   });
 
-  log.info('Hardware-bound License IPC handlers registered');
+  log.info('Simple License IPC handlers registered');
 }

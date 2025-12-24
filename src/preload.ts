@@ -323,12 +323,12 @@ const whatsAppApi = {
 
 contextBridge.exposeInMainWorld('whatsAppApi', whatsAppApi);
 
-// Hardware-Bound License API
+// Simple License API
 const licenseApi = {
-  getHardwareId: () => ipcRenderer.invoke('license:getHardwareId') as Promise<ApiResponse<string>>,
+  getMachineId: () => ipcRenderer.invoke('license:getMachineId') as Promise<ApiResponse<string>>,
   getInfo: () => ipcRenderer.invoke('license:getInfo') as Promise<ApiResponse<LicenseInfo>>,
   isActivated: () => ipcRenderer.invoke('license:isActivated') as Promise<ApiResponse<boolean>>,
-  activate: (activationKey: string) => ipcRenderer.invoke('license:activate', activationKey) as Promise<ApiResponse<{ success: boolean }>>,
+  activate: (licenseKey: string) => ipcRenderer.invoke('license:activate', licenseKey) as Promise<ApiResponse<{ success: boolean }>>,
   deactivate: () => ipcRenderer.invoke('license:deactivate') as Promise<ApiResponse<{ success: boolean }>>,
 };
 

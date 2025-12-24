@@ -201,22 +201,58 @@ class HardwareLicenseService {
                 (0, connection_1.executeNonQuery)('INSERT INTO license (id, hardware_id, license_key, activated_at, is_active) VALUES (1, ?, ?, ?, 1)', [currentHardwareId, formattedKey, activatedAt]);
                 electron_log_1.default.info('New license created for hardware:', currentHardwareId);
             }
-            // Force save to disk immediately
+            // CRITICAL: Force save to disk immediately with multiple saves for reliability
+            electron_log_1.default.info('Starting database save sequence...');
             (0, connection_1.saveDatabase)();
-            electron_log_1.default.info('Database saved after license activation');
-            // Verify the license was saved correctly
-            const verification = (0, connection_1.executeQuery)('SELECT hardware_id, license_key, is_active FROM license WHERE id = 1', []);
-            electron_log_1.default.info('License verification after activation:', verification);
-            if (verification.length === 0 || verification[0].is_active !== 1) {
-                throw new Error('فشل التحقق من تفعيل الترخيص في قاعدة البيانات');
+            electron_log_1.default.info('First save completed');
+            // Second save to ensure data is persisted (Windows filesystem sometimes needs this)
+            (0, connection_1.saveDatabase)();
+            electron_log_1.default.info('Second save completed (verification save)');
+            // CRITICAL: Multiple verification attempts with detailed logging
+            let verificationAttempts = 0;
+            let verificationSuccess = false;
+            const maxAttempts = 3;
+            while (verificationAttempts < maxAttempts && !verificationSuccess) {
+                verificationAttempts++;
+                electron_log_1.default.info(`Verification attempt ${verificationAttempts}/${maxAttempts}...`);
+                const verification = (0, connection_1.executeQuery)('SELECT hardware_id, license_key, is_active FROM license WHERE id = 1', []);
+                electron_log_1.default.info(`Verification query result (attempt ${verificationAttempts}):`, verification);
+                if (verification.length === 0) {
+                    electron_log_1.default.warn(`Attempt ${verificationAttempts}: No license record found`);
+                    if (verificationAttempts < maxAttempts) {
+                        // Wait and try again
+                        continue;
+                    }
+                    throw new Error('فشل التحقق من تفعيل الترخيص في قاعدة البيانات - لم يتم العثور على السجل');
+                }
+                const record = verification[0];
+                // Check all fields
+                if (record.is_active !== 1) {
+                    electron_log_1.default.warn(`Attempt ${verificationAttempts}: License is not active (is_active=${record.is_active})`);
+                    if (verificationAttempts < maxAttempts)
+                        continue;
+                    throw new Error('الترخيص غير نشط بعد التفعيل');
+                }
+                if (record.hardware_id !== currentHardwareId) {
+                    electron_log_1.default.warn(`Attempt ${verificationAttempts}: Hardware ID mismatch - Expected: ${currentHardwareId}, Got: ${record.hardware_id}`);
+                    if (verificationAttempts < maxAttempts)
+                        continue;
+                    throw new Error('عدم تطابق معرف الجهاز بعد الحفظ');
+                }
+                if (record.license_key !== formattedKey) {
+                    electron_log_1.default.warn(`Attempt ${verificationAttempts}: License key mismatch - Expected: ${formattedKey}, Got: ${record.license_key}`);
+                    if (verificationAttempts < maxAttempts)
+                        continue;
+                    throw new Error('عدم تطابق مفتاح الترخيص بعد الحفظ');
+                }
+                // All checks passed
+                verificationSuccess = true;
+                electron_log_1.default.info(`✅ Verification successful on attempt ${verificationAttempts}`);
             }
-            if (verification[0].hardware_id !== currentHardwareId) {
-                throw new Error('عدم تطابق معرف الجهاز بعد الحفظ');
+            if (!verificationSuccess) {
+                throw new Error('فشل التحقق من الترخيص بعد عدة محاولات');
             }
-            if (verification[0].license_key !== formattedKey) {
-                throw new Error('عدم تطابق مفتاح الترخيص بعد الحفظ');
-            }
-            electron_log_1.default.info('License activated successfully and verified');
+            electron_log_1.default.info('✅ License activated successfully and verified after', verificationAttempts, 'attempts');
         }
         catch (error) {
             electron_log_1.default.error('Failed to activate license:', error);

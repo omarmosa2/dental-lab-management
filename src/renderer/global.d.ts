@@ -85,10 +85,10 @@ declare global {
       closeQRWindow: () => Promise<ApiResponse<{ success: boolean }>>;
     };
     licenseApi: {
-      getHardwareId: () => Promise<ApiResponse<string>>;
+      getMachineId: () => Promise<ApiResponse<string>>;
       getInfo: () => Promise<ApiResponse<LicenseInfo>>;
       isActivated: () => Promise<ApiResponse<boolean>>;
-      activate: (activationKey: string) => Promise<ApiResponse<{ success: boolean }>>;
+      activate: (licenseKey: string) => Promise<ApiResponse<{ success: boolean }>>;
       deactivate: () => Promise<ApiResponse<{ success: boolean }>>;
     };
     printApi: {

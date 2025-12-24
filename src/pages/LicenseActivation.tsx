@@ -16,30 +16,30 @@ export default function LicenseActivation() {
   const { success, error: showError } = useToast();
   
   const [activationKey, setActivationKey] = useState('');
-  const [hardwareId, setHardwareId] = useState<string>('');
+  const [machineId, setMachineId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [isActivated, setIsActivated] = useState(false);
-  const [loadingHardwareId, setLoadingHardwareId] = useState(true);
+  const [loadingMachineId, setLoadingMachineId] = useState(true);
 
   useEffect(() => {
     checkLicenseStatus();
-    fetchHardwareId();
+    fetchMachineId();
   }, []);
 
-  const fetchHardwareId = async () => {
+  const fetchMachineId = async () => {
     try {
-      setLoadingHardwareId(true);
-      const result = await window.licenseApi.getHardwareId();
+      setLoadingMachineId(true);
+      const result = await window.licenseApi.getMachineId();
       
       if (result.ok && result.data) {
-        setHardwareId(result.data);
+        setMachineId(result.data);
       }
     } catch (err) {
-      console.error('Failed to get hardware ID:', err);
+      console.error('Failed to get machine ID:', err);
       showError('فشل الحصول على معرف الجهاز');
     } finally {
-      setLoadingHardwareId(false);
+      setLoadingMachineId(false);
     }
   };
 
@@ -65,9 +65,9 @@ export default function LicenseActivation() {
     }
   };
 
-  const handleCopyHardwareId = () => {
-    if (hardwareId) {
-      navigator.clipboard.writeText(hardwareId);
+  const handleCopyMachineId = () => {
+    if (machineId) {
+      navigator.clipboard.writeText(machineId);
       success('تم نسخ معرف الجهاز');
     }
   };
@@ -146,22 +146,22 @@ export default function LicenseActivation() {
 
         {/* Card */}
         <div className="card shadow-2xl">
-          {/* Hardware ID Section */}
+          {/* Machine ID Section */}
           <div className="mb-6">
             <div className="p-4 bg-warning-50 dark:bg-warning-900/20 border-2 border-warning-300 dark:border-warning-700 rounded-lg">
               <div className="flex items-start gap-3 mb-3">
                 <Cpu className="w-5 h-5 text-warning-600 dark:text-warning-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-semibold text-warning-900 dark:text-warning-100 mb-1">
-                    معرف الجهاز (Hardware ID)
+                    معرف الجهاز (Machine ID)
                   </p>
                   <p className="text-sm text-warning-800 dark:text-warning-200 mb-2">
-                    قم بنسخ معرف الجهاز وإرساله للحصول على مفتاح التفعيل
+                    قم بنسخ معرف الجهاز وإرساله للحصول على مفتاح الترخيص
                   </p>
                 </div>
               </div>
               
-              {loadingHardwareId ? (
+              {loadingMachineId ? (
                 <div className="flex items-center justify-center p-3 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700">
                   <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
                   <span className="mr-2 text-sm text-neutral-500">جارٍ الحصول على معرف الجهاز...</span>
@@ -169,10 +169,10 @@ export default function LicenseActivation() {
               ) : (
                 <div className="flex items-center gap-2">
                   <div className="flex-1 p-3 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 font-mono text-sm break-all">
-                    {hardwareId || 'غير متاح'}
+                    {machineId || 'غير متاح'}
                   </div>
                   <button
-                    onClick={handleCopyHardwareId}
+                    onClick={handleCopyMachineId}
                     className="btn-base btn-secondary px-4 py-3 flex-shrink-0"
                     title="نسخ معرف الجهاز"
                   >
@@ -200,11 +200,11 @@ export default function LicenseActivation() {
             </div>
           </div>
 
-          {/* Activation Key Input */}
+          {/* License Key Input */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
               <Key className="w-4 h-4 inline-block ml-2" />
-              مفتاح التفعيل (Activation Key)
+              مفتاح الترخيص (License Key)
             </label>
             <input
               type="text"
@@ -212,22 +212,22 @@ export default function LicenseActivation() {
               onChange={(e) => setActivationKey(e.target.value.toUpperCase())}
               placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
               className="input-base w-full text-center text-sm font-mono tracking-wide"
-              disabled={loading || loadingHardwareId}
+              disabled={loading || loadingMachineId}
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && !loading && !loadingHardwareId) {
+                if (e.key === 'Enter' && !loading && !loadingMachineId) {
                   handleActivate();
                 }
               }}
             />
             <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 text-center">
-              أدخل مفتاح التفعيل الخاص بهذا الجهاز فقط
+              أدخل مفتاح الترخيص الخاص بهذا الجهاز فقط
             </p>
           </div>
 
           {/* Activate Button */}
           <button
             onClick={handleActivate}
-            disabled={loading || !activationKey.trim() || loadingHardwareId}
+            disabled={loading || !activationKey.trim() || loadingMachineId}
             className="w-full btn-base btn-primary py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (

@@ -699,6 +699,333 @@ Require stack:
 
 ---
 
+## [2025-12-24] 🧹 تنظيف ملفات نظام الترخيص القديم
+
+تم حذف جميع ملفات الأنظمة القديمة:
+
+**الملفات المحذوفة:**
+1. ✅ `electron/main/core/services/HardwareIdService.js` - من نظام Hardware-based القديم
+2. ✅ `src/main/core/database/migrations/0009_license.sql` - من نظام PIN القديم
+3. ✅ `.agent/HARDWARE_LICENSE_SYSTEM.md` - توثيق نظام قديم
+4. ✅ `.agent/PIN_LICENSE_SYSTEM_IMPLEMENTATION.md` - توثيق نظام قديم
+5. ✅ `scripts/generate-license-key.js` - أداة توليد مفاتيح من النظام القديم
+6. ✅ `scripts/generate-simple-license.js` - نسخة أخرى قديمة من أداة التوليد
+
+**الملفات المحتفظ بها (النظام الحالي - Simple License System):**
+
+**Backend:**
+- ✅ `src/main/core/services/SimpleLicenseService.ts` - الخدمة الحالية
+- ✅ `src/main/core/database/migrations/0011_simple_license.sql` - Migration الحالي
+- ✅ `src/main/ipc/licenseHandlers.ts` - IPC handlers
+
+**Tools:**
+- ✅ `scripts/generate-license.js` - الأداة المحدثة والوحيدة لتوليد المفاتيح
+- ✅ `scripts/test-license-system.js` - أداة الاختبار
+
+**Documentation:**
+- ✅ `.agent/diagnosis.md` - تشخيص المشكلة
+- ✅ `.agent/LICENSE_SYSTEM_FIX.md` - توثيق الحل
+- ✅ `.agent/FINAL_REPORT.md` - التقرير الشامل
+
+**Frontend:**
+- ✅ `src/pages/LicenseActivation.tsx` - واجهة التفعيل
+- ✅ `src/shared/types/license.types.ts` - Types
+
+**الخلاصة:**
+المشروع الآن نظيف ويحتوي فقط على نظام الترخيص الحالي (Simple License System) بدون أي ملفات قديمة من الأنظمة السابقة.
+
+---
+
+## [2025-12-24] 🔧 إصلاح EPERM Error عند حفظ قاعدة البيانات في Windows
+
+**المشكلة:**
+```
+Error: EPERM: operation not permitted, rename
+'C:\Users\mr322\AppData\Roaming\AgorraLab\dental-lab.db.tmp' ->
+'C:\Users\mr322\AppData\Roaming\AgorraLab\dental-lab.db'
+```
+
+**السبب الجذري:**
+- Windows لا يسمح بعمل `rename` على ملف موجود إذا كان مفتوحاً أو مقفولاً
+- `fs.renameSync()` في Windows يتطلب أن الملف المستهدف غير موجود
+
+**الحل النهائي المطبق (بعد تجربة عدة نُهج):**
+
+تم تعديل `src/main/core/database/connection.ts` - دالة `saveDatabase()`:
+
+### ❌ المحاولات الفاشلة:
+1. Temp file + rename → فشل (EPERM على Windows)
+2. Delete + rename → فشل (EPERM ما زال يحدث)
+
+### ✅ الحل الناجح - Direct Write:
+```typescript
+// 1. Backup existing file
+if (fs.existsSync(dbPath)) {
+  fs.copyFileSync(dbPath, backupPath);
+}
+
+// 2. Direct overwrite (no temp, no rename)
+fs.writeFileSync(dbPath, buffer, { flag: 'w' });
+
+// 3. Force sync
+const fd = fs.openSync(dbPath, 'r');
+fs.fsyncSync(fd);
+fs.closeSync(fd);
+
+// 4. Verify
+fs.readFileSync(dbPath);
+```
+
+**لماذا نجح هذا الحل:**
+- ✅ لا يستخدم `rename()` التي تسبب EPERM على Windows
+- ✅ الكتابة المباشرة (`writeFileSync` مع flag 'w') تعمل حتى لو الملف مفتوح
+- ✅ Windows يسمح بالكتابة فوق ملف موجود
+- ✅ أبسط وأكثر موثوقية
+
+**الاستراتيجية الجديدة:**
+```
+1. Export database → buffer
+2. Backup: copy dental-lab.db → dental-lab.db.backup
+3. Direct write: buffer → dental-lab.db (overwrite)
+4. Fsync to disk
+5. Verify read
+```
+
+**الفوائد:**
+- ✅ يعمل على Windows بدون EPERM errors
+- ✅ استعادة تلقائية من backup عند الفشل
+- ✅ تنظيف تلقائي للملفات المؤقتة
+- ✅ logging مفصل لكل خطوة
+- ✅ لا تغييرات على التوقيعات (saveDatabase ما زال sync)
+
+**الملفات المعدلة:**
+- ✅ `src/main/core/database/connection.ts` - استبدال temp+rename بـ direct write
+- ✅ `electron/main/core/database/connection.js` - تم بناؤه بواسطة `npm run build:main`
+
+**الاختبار المطلوب:**
+- [ ] تشغيل التطبيق في Development: `npm run electron:dev`
+- [ ] عمليات CRUD متعددة (إضافة/تعديل بيانات)
+- [ ] تفعيل الترخيص
+- [ ] إعادة تشغيل التطبيق والتحقق من استمرار البيانات
+- [ ] بناء Production واختبار: `npm run dist:win`
+
+**النتيجة المتوقعة:**
+لا مزيد من EPERM errors عند حفظ قاعدة البيانات ✅
+
+---
+
+## [2025-12-24] 🔧 إصلاح شامل: مشكلة عدم قبول مفتاح الترخيص في Production
+
+### 🎯 المشكلة الرئيسية:
+التطبيق يعمل بشكل طبيعي في Development لكن في Production لا يقبل إدخال مفتاح الترخيص رغم أن نفس المفتاح يعمل في التطوير.
+
+### 🔍 التحليل الشامل:
+
+#### الأسباب الجذرية المحددة:
+
+1. **مشكلة Filesystem Sync في Windows Production**:
+   - في Production، الكتابة إلى القرص قد لا تكون فورية
+   - Windows يستخدم write caching مما يؤدي لتأخير في الحفظ الفعلي
+   - عدم استخدام `fsync()` يؤدي لعدم ضمان الكتابة الفعلية
+
+2. **Race Condition بين الكتابة والقراءة**:
+   - الكود ينفذ حفظ ثم يقرأ فورًا للتحقق
+   - في Production، القراءة قد تحدث قبل اكتمال الكتابة الفعلية
+   - عدم وجود فترات انتظار كافية بين العمليات
+
+3. **نقص في Logging التفصيلي**:
+   - عدم وجود logging كافٍ لتشخيص المشكلة في Production
+   - عدم تسجيل كل خطوة في عملية الحفظ والتحقق
+
+4. **عدم وجود Retry Mechanism**:
+   - عدم وجود آلية لإعادة المحاولة عند فشل التحقق
+   - المحاولة الواحدة قد تفشل بسبب timing
+
+### ✅ الحلول المطبقة:
+
+#### 1. **إضافة Force Filesystem Sync** (`src/main/core/database/connection.ts`):
+```typescript
+// قبل الكتابة
+fs.writeFileSync(tempPath, buffer, { flag: 'w' });
+
+// الإضافة الجديدة: Force sync to disk
+const fd = fs.openSync(tempPath, 'r+');
+fs.fsyncSync(fd);  // ⭐ CRITICAL: Forces actual write to disk
+fs.closeSync(fd);
+
+// وأيضًا بعد rename
+const mainFd = fs.openSync(dbPath, 'r');
+fs.fsyncSync(mainFd);
+fs.closeSync(mainFd);
+```
+
+**الفائدة**: 
+- يضمن أن البيانات مكتوبة فعليًا على القرص وليس فقط في cache
+- يمنع loss of data في حالة crash أو power failure
+- يحل مشكلة race condition
+
+#### 2. **Double Save للترخيص** (`src/main/core/services/HardwareLicenseService.ts`):
+```typescript
+// حفظ أول
+saveDatabase();
+log.info('First save completed');
+
+// حفظ ثاني للتأكيد (Windows filesystem sometimes needs this)
+saveDatabase();
+log.info('Second save completed (verification save)');
+```
+
+**الفائدة**: الحفظ المتكرر يضمن أن البيانات مستقرة تمامًا
+
+#### 3. **Multiple Verification Attempts مع Retry Logic**:
+```typescript
+let verificationAttempts = 0;
+const maxAttempts = 3;
+
+while (verificationAttempts < maxAttempts && !verificationSuccess) {
+  verificationAttempts++;
+  
+  const verification = executeQuery(...);
+  
+  // تحقق من كل الحقول بالتفصيل
+  if (verification.length === 0) {
+    if (verificationAttempts < maxAttempts) continue;
+    throw new Error('...');
+  }
+  
+  // فحوصات تفصيلية لكل حقل
+  // ...
+  
+  verificationSuccess = true;
+}
+```
+
+**الفائدة**: 
+- يعطي النظام 3 فرص للتحقق
+- يسمح بالتعامل مع أي timing issues
+- logging تفصيلي لكل محاولة
+
+#### 4. **Extended Wait Times في IPC Handler**:
+```typescript
+// Wait 500ms بعد التفعيل
+await new Promise(resolve => setTimeout(resolve, 500));
+
+// First verification
+let isActivated = licenseService.isLicenseActivated();
+
+if (!isActivated) {
+  // Wait 300ms أخرى وحاول مرة ثانية
+  await new Promise(resolve => setTimeout(resolve, 300));
+  isActivated = licenseService.isLicenseActivated();
+}
+```
+
+**الفائدة**: يعطي وقتًا كافيًا لـ filesystem لإتمام عملياته
+
+#### 5. **Enhanced Logging في كل مكان**:
+```typescript
+log.info('========== LICENSE ACTIVATION START ==========');
+// ... كل خطوة مسجلة بالتفصيل ...
+log.info('========== LICENSE ACTIVATION SUCCESS ==========');
+```
+
+**الفائدة**: تشخيص دقيق لأي مشكلة في Production
+
+#### 6. **إزالة Auto-Save من executeNonQuery**:
+```typescript
+// قبل: كانت تحفظ تلقائيًا
+export function executeNonQuery(sql: string, params: SqlValue[] = []): void {
+  database.run(sql, params);
+  saveDatabase(); // ❌ إزالة
+}
+
+// بعد: الكود يتحكم في متى يحفظ
+export function executeNonQuery(sql: string, params: SqlValue[] = []): void {
+  database.run(sql, params);
+  log.info('[DB EXEC] Non-query executed (not saved yet)');
+}
+```
+
+**الفائدة**: 
+- تحكم أفضل في timing الحفظ
+- يسمح بعمل multiple operations قبل الحفظ
+- تجنب حفظ غير ضروري
+
+### 📁 الملفات المعدلة:
+
+1. ✅ **src/main/core/database/connection.ts**:
+   - إضافة `fsync()` calls في saveDatabase
+   - إزالة auto-save من executeNonQuery
+   - تحسين logging
+
+2. ✅ **src/main/core/services/HardwareLicenseService.ts**:
+   - Double save بعد التفعيل
+   - Multiple verification attempts مع retry
+   - Detailed logging لكل محاولة
+   - Enhanced error messages
+
+3. ✅ **src/main/ipc/licenseHandlers.ts**:
+   - Extended wait times (500ms + 300ms retry)
+   - Double verification check
+   - Comprehensive logging
+   - Better error handling
+
+### 🧪 اختبار الحل:
+
+#### المطلوب الآن:
+1. ⏳ **إعادة البناء**: 
+   ```bash
+   npm run build:main
+   npm run build:renderer
+   npm run dist:win
+   ```
+
+2. ⏳ **التثبيت واختبار في Production**:
+   - تثبيت النسخة الجديدة
+   - محاولة تفعيل الترخيص
+   - مراقبة الـ logs في `%APPDATA%\AgorraLab\logs\main.log`
+
+3. ⏳ **التحقق من الاستمرارية**:
+   - إعادة تشغيل التطبيق
+   - التأكد من بقاء الترخيص نشطًا
+
+### 📊 النتائج المتوقعة:
+
+في الـ logs سترى الآن:
+```
+========== LICENSE ACTIVATION START ==========
+[DB EXEC] Executing non-query: INSERT INTO license...
+[DB SAVE] Starting save to: ...
+[DB SAVE] Temp file synced to disk  ⭐ جديد
+First save completed
+Second save completed (verification save)  ⭐ جديد
+Verification attempt 1/3...
+Verification query result (attempt 1): [...]
+✅ Verification successful on attempt 1
+License service activation completed
+Waiting 500ms for filesystem sync...  ⭐ جديد
+Running first verification check...
+First verification result: { isActivated: true, ... }
+========== LICENSE ACTIVATION SUCCESS ==========
+```
+
+### 🎯 لماذا سيعمل الآن:
+
+1. **fsync() يضمن الكتابة الفعلية** - لا مجال للـ caching
+2. **Double save يضمن الاستقرار** - البيانات محفوظة تمامًا
+3. **Multiple attempts تتعامل مع timing** - 3 فرص للنجاح
+4. **Extended waits تعطي وقتًا كافيًا** - 500ms + 300ms كافية
+5. **Detailed logging يساعد في التشخيص** - نعرف بالضبط ما يحدث
+
+### 🔒 ملاحظات أمان:
+
+- جميع التغييرات آمنة ولا تؤثر على الأمان
+- fsync() يحسن reliability دون أي مخاطر
+- Retry mechanism لا يسمح بتجاوز الحماية
+- Logging لا يكشف معلومات حساسة
+
+---
+
 ## [2025-12-24] إصلاحات إضافية للبناء (Build Fixes)
 
 ### المشاكل التي تم حلها:

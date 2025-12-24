@@ -133,12 +133,12 @@ const whatsAppApi = {
     closeQRWindow: () => electron_1.ipcRenderer.invoke('whatsapp:closeQRWindow'),
 };
 electron_1.contextBridge.exposeInMainWorld('whatsAppApi', whatsAppApi);
-// Hardware-Bound License API
+// Simple License API
 const licenseApi = {
-    getHardwareId: () => electron_1.ipcRenderer.invoke('license:getHardwareId'),
+    getMachineId: () => electron_1.ipcRenderer.invoke('license:getMachineId'),
     getInfo: () => electron_1.ipcRenderer.invoke('license:getInfo'),
     isActivated: () => electron_1.ipcRenderer.invoke('license:isActivated'),
-    activate: (activationKey) => electron_1.ipcRenderer.invoke('license:activate', activationKey),
+    activate: (licenseKey) => electron_1.ipcRenderer.invoke('license:activate', licenseKey),
     deactivate: () => electron_1.ipcRenderer.invoke('license:deactivate'),
 };
 electron_1.contextBridge.exposeInMainWorld('licenseApi', licenseApi);

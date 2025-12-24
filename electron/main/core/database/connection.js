@@ -152,31 +152,70 @@ function saveDatabase() {
             electron_log_1.default.info(`[DB SAVE] Creating directory: ${dir}`);
             fs.mkdirSync(dir, { recursive: true });
         }
-        // Write to a temp file first, then rename (atomic operation)
-        const tempPath = `${dbPath}.tmp`;
-        electron_log_1.default.info(`[DB SAVE] Writing to temp file: ${tempPath}`);
-        fs.writeFileSync(tempPath, buffer, { flag: 'w' });
-        // Verify temp file was written
-        if (!fs.existsSync(tempPath)) {
-            throw new Error('Failed to write temp database file');
-        }
-        const tempStats = fs.statSync(tempPath);
-        electron_log_1.default.info(`[DB SAVE] Temp file written. Size: ${tempStats.size} bytes`);
-        // Rename temp file to actual database file (atomic on most systems)
+        // ✅ WINDOWS FIX: Use direct write instead of temp+rename
+        // This avoids EPERM errors completely
+        // Backup existing file first
         if (fs.existsSync(dbPath)) {
-            // Backup current file
             const backupPath = `${dbPath}.backup`;
             electron_log_1.default.info(`[DB SAVE] Creating backup: ${backupPath}`);
-            fs.copyFileSync(dbPath, backupPath);
+            try {
+                // Remove old backup if exists
+                if (fs.existsSync(backupPath)) {
+                    fs.unlinkSync(backupPath);
+                }
+                // Create new backup
+                fs.copyFileSync(dbPath, backupPath);
+                electron_log_1.default.info(`[DB SAVE] ✅ Backup created successfully`);
+            }
+            catch (backupError) {
+                electron_log_1.default.warn(`[DB SAVE] ⚠️ Backup failed (continuing anyway):`, backupError.message);
+            }
         }
-        electron_log_1.default.info(`[DB SAVE] Renaming temp file to: ${dbPath}`);
-        fs.renameSync(tempPath, dbPath);
+        // Direct write to database file (overwrites existing)
+        electron_log_1.default.info(`[DB SAVE] Writing directly to: ${dbPath}`);
+        try {
+            fs.writeFileSync(dbPath, buffer, { flag: 'w' });
+            electron_log_1.default.info(`[DB SAVE] ✅ File written successfully`);
+        }
+        catch (writeError) {
+            electron_log_1.default.error(`[DB SAVE] ❌ Write failed:`, writeError.message);
+            // Try to restore from backup
+            const backupPath = `${dbPath}.backup`;
+            if (fs.existsSync(backupPath)) {
+                electron_log_1.default.info(`[DB SAVE] Attempting to restore from backup...`);
+                try {
+                    fs.copyFileSync(backupPath, dbPath);
+                    electron_log_1.default.info(`[DB SAVE] ✅ Restored from backup`);
+                }
+                catch (restoreError) {
+                    electron_log_1.default.error(`[DB SAVE] ❌ Restore from backup also failed`);
+                }
+            }
+            throw new Error(`Failed to save database: ${writeError.message}`);
+        }
+        // Force sync to disk
+        electron_log_1.default.info(`[DB SAVE] Forcing sync to disk...`);
+        try {
+            const fd = fs.openSync(dbPath, 'r');
+            fs.fsyncSync(fd);
+            fs.closeSync(fd);
+            electron_log_1.default.info(`[DB SAVE] ✅ Sync completed`);
+        }
+        catch (syncError) {
+            electron_log_1.default.warn(`[DB SAVE] ⚠️ Sync failed (data may not be on disk yet):`, syncError.message);
+        }
         // Verify the file was saved
         const stats = fs.statSync(dbPath);
         electron_log_1.default.info(`[DB SAVE] ✅ Database saved successfully. Size: ${stats.size} bytes, Path: ${dbPath}`);
         // Extra verification: Check file is readable
-        const verification = fs.readFileSync(dbPath);
-        electron_log_1.default.info(`[DB SAVE] ✅ Verification read successful. Size: ${verification.length} bytes`);
+        try {
+            const verification = fs.readFileSync(dbPath);
+            electron_log_1.default.info(`[DB SAVE] ✅ Verification read successful. Size: ${verification.length} bytes`);
+        }
+        catch (verifyError) {
+            electron_log_1.default.error(`[DB SAVE] ❌ Verification read failed:`, verifyError.message);
+            throw new Error('Database saved but cannot be read back');
+        }
     }
     catch (error) {
         electron_log_1.default.error('[DB SAVE] ❌ Failed to save database:', error);
@@ -252,9 +291,7 @@ function executeNonQuery(sql, params = []) {
     const database = getDatabase();
     electron_log_1.default.info('[DB EXEC] Executing non-query:', { sql: sql.substring(0, 100), params });
     database.run(sql, params);
-    electron_log_1.default.info('[DB EXEC] Non-query executed, now saving...');
-    saveDatabase();
-    electron_log_1.default.info('[DB EXEC] Save completed');
+    electron_log_1.default.info('[DB EXEC] Non-query executed (not saved yet)');
 }
 /**
  * Execute multiple queries in a transaction

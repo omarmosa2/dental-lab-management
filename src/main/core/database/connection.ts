@@ -120,37 +120,73 @@ export function saveDatabase(): void {
       fs.mkdirSync(dir, { recursive: true });
     }
     
-    // Write to a temp file first, then rename (atomic operation)
-    const tempPath = `${dbPath}.tmp`;
-    log.info(`[DB SAVE] Writing to temp file: ${tempPath}`);
-    fs.writeFileSync(tempPath, buffer, { flag: 'w' });
+    // ✅ WINDOWS FIX: Use direct write instead of temp+rename
+    // This avoids EPERM errors completely
     
-    // Verify temp file was written
-    if (!fs.existsSync(tempPath)) {
-      throw new Error('Failed to write temp database file');
-    }
-    
-    const tempStats = fs.statSync(tempPath);
-    log.info(`[DB SAVE] Temp file written. Size: ${tempStats.size} bytes`);
-    
-    // Rename temp file to actual database file (atomic on most systems)
+    // Backup existing file first
     if (fs.existsSync(dbPath)) {
-      // Backup current file
       const backupPath = `${dbPath}.backup`;
       log.info(`[DB SAVE] Creating backup: ${backupPath}`);
-      fs.copyFileSync(dbPath, backupPath);
+      
+      try {
+        // Remove old backup if exists
+        if (fs.existsSync(backupPath)) {
+          fs.unlinkSync(backupPath);
+        }
+        // Create new backup
+        fs.copyFileSync(dbPath, backupPath);
+        log.info(`[DB SAVE] ✅ Backup created successfully`);
+      } catch (backupError: any) {
+        log.warn(`[DB SAVE] ⚠️ Backup failed (continuing anyway):`, backupError.message);
+      }
     }
     
-    log.info(`[DB SAVE] Renaming temp file to: ${dbPath}`);
-    fs.renameSync(tempPath, dbPath);
+    // Direct write to database file (overwrites existing)
+    log.info(`[DB SAVE] Writing directly to: ${dbPath}`);
+    try {
+      fs.writeFileSync(dbPath, buffer, { flag: 'w' });
+      log.info(`[DB SAVE] ✅ File written successfully`);
+    } catch (writeError: any) {
+      log.error(`[DB SAVE] ❌ Write failed:`, writeError.message);
+      
+      // Try to restore from backup
+      const backupPath = `${dbPath}.backup`;
+      if (fs.existsSync(backupPath)) {
+        log.info(`[DB SAVE] Attempting to restore from backup...`);
+        try {
+          fs.copyFileSync(backupPath, dbPath);
+          log.info(`[DB SAVE] ✅ Restored from backup`);
+        } catch (restoreError) {
+          log.error(`[DB SAVE] ❌ Restore from backup also failed`);
+        }
+      }
+      
+      throw new Error(`Failed to save database: ${writeError.message}`);
+    }
+    
+    // Force sync to disk
+    log.info(`[DB SAVE] Forcing sync to disk...`);
+    try {
+      const fd = fs.openSync(dbPath, 'r');
+      fs.fsyncSync(fd);
+      fs.closeSync(fd);
+      log.info(`[DB SAVE] ✅ Sync completed`);
+    } catch (syncError: any) {
+      log.warn(`[DB SAVE] ⚠️ Sync failed (data may not be on disk yet):`, syncError.message);
+    }
     
     // Verify the file was saved
     const stats = fs.statSync(dbPath);
     log.info(`[DB SAVE] ✅ Database saved successfully. Size: ${stats.size} bytes, Path: ${dbPath}`);
     
     // Extra verification: Check file is readable
-    const verification = fs.readFileSync(dbPath);
-    log.info(`[DB SAVE] ✅ Verification read successful. Size: ${verification.length} bytes`);
+    try {
+      const verification = fs.readFileSync(dbPath);
+      log.info(`[DB SAVE] ✅ Verification read successful. Size: ${verification.length} bytes`);
+    } catch (verifyError: any) {
+      log.error(`[DB SAVE] ❌ Verification read failed:`, verifyError.message);
+      throw new Error('Database saved but cannot be read back');
+    }
   } catch (error) {
     log.error('[DB SAVE] ❌ Failed to save database:', error);
     throw error;
@@ -233,9 +269,7 @@ export function executeNonQuery(sql: string, params: SqlValue[] = []): void {
   const database = getDatabase();
   log.info('[DB EXEC] Executing non-query:', { sql: sql.substring(0, 100), params });
   database.run(sql, params);
-  log.info('[DB EXEC] Non-query executed, now saving...');
-  saveDatabase();
-  log.info('[DB EXEC] Save completed');
+  log.info('[DB EXEC] Non-query executed (not saved yet)');
 }
 
 /**

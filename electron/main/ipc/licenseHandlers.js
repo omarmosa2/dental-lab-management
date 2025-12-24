@@ -1,15 +1,15 @@
 "use strict";
 // licenseHandlers.ts
-// IPC handlers for hardware-bound license management
+// IPC handlers for simple license management
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerLicenseHandlers = registerLicenseHandlers;
 const electron_1 = require("electron");
-const HardwareLicenseService_1 = require("../core/services/HardwareLicenseService");
+const SimpleLicenseService_1 = require("../core/services/SimpleLicenseService");
 const electron_log_1 = __importDefault(require("electron-log"));
-const licenseService = (0, HardwareLicenseService_1.getHardwareLicenseService)();
+const licenseService = (0, SimpleLicenseService_1.getSimpleLicenseService)();
 // Helper to wrap handlers with error handling
 function wrapHandler(handler) {
     try {
@@ -42,11 +42,11 @@ function wrapHandler(handler) {
     }
 }
 function registerLicenseHandlers() {
-    // Get hardware ID
-    electron_1.ipcMain.handle('license:getHardwareId', async () => {
-        electron_log_1.default.info('IPC: license:getHardwareId');
+    // Get machine ID
+    electron_1.ipcMain.handle('license:getMachineId', async () => {
+        electron_log_1.default.info('IPC: license:getMachineId');
         return wrapHandler(() => {
-            return licenseService.getHardwareId();
+            return licenseService.getMachineId();
         });
     });
     // Get license info
@@ -64,29 +64,43 @@ function registerLicenseHandlers() {
             const info = licenseService.getLicenseInfo();
             electron_log_1.default.info('License check result:', {
                 isActivated,
-                hardwareId: info.hardwareId,
+                machineId: info.machineId,
                 hasKey: !!info.licenseKey
             });
             return isActivated;
         });
     });
-    // Activate license with activation key
-    electron_1.ipcMain.handle('license:activate', async (_, activationKey) => {
-        electron_log_1.default.info('IPC: license:activate', { keyLength: activationKey?.length });
+    // Activate license with license key
+    electron_1.ipcMain.handle('license:activate', async (_, licenseKey) => {
+        electron_log_1.default.info('IPC: license:activate', { keyLength: licenseKey?.length });
         return wrapHandler(async () => {
-            // Activate license with activation key
-            licenseService.activateLicense(activationKey);
-            // Wait a moment for filesystem operations to complete
-            await new Promise(resolve => setTimeout(resolve, 200));
-            // Double-check activation status
-            const isActivated = licenseService.isLicenseActivated();
-            electron_log_1.default.info('License activation verification:', { isActivated });
-            // Get full license info for debugging
-            const licenseInfo = licenseService.getLicenseInfo();
-            electron_log_1.default.info('License info after activation:', licenseInfo);
+            electron_log_1.default.info('========== LICENSE ACTIVATION START ==========');
+            // Activate license (includes saves and verification)
+            licenseService.activateLicense(licenseKey);
+            electron_log_1.default.info('License service activation completed');
+            // Wait for filesystem sync
+            electron_log_1.default.info('Waiting 500ms for filesystem sync...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            // First verification check
+            electron_log_1.default.info('Running first verification check...');
+            let isActivated = licenseService.isLicenseActivated();
+            let licenseInfo = licenseService.getLicenseInfo();
+            electron_log_1.default.info('First verification result:', { isActivated, info: licenseInfo });
             if (!isActivated) {
-                throw new Error('License activation failed - verification check returned false');
+                // Wait and try one more time
+                electron_log_1.default.warn('First verification failed, waiting 300ms and retrying...');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                isActivated = licenseService.isLicenseActivated();
+                licenseInfo = licenseService.getLicenseInfo();
+                electron_log_1.default.info('Second verification result:', { isActivated, info: licenseInfo });
             }
+            if (!isActivated) {
+                electron_log_1.default.error('========== LICENSE ACTIVATION FAILED ==========');
+                electron_log_1.default.error('Final license info:', licenseInfo);
+                throw new Error('فشل التحقق من تفعيل الترخيص - يرجى المحاولة مرة أخرى أو الاتصال بالدعم');
+            }
+            electron_log_1.default.info('========== LICENSE ACTIVATION SUCCESS ==========');
+            electron_log_1.default.info('Final license info:', licenseInfo);
             return { success: true };
         });
     });
@@ -98,5 +112,5 @@ function registerLicenseHandlers() {
             return { success: true };
         });
     });
-    electron_log_1.default.info('Hardware-bound License IPC handlers registered');
+    electron_log_1.default.info('Simple License IPC handlers registered');
 }

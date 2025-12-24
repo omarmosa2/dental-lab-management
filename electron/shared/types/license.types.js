@@ -1,4 +1,4 @@
 "use strict";
-// Hardware-Bound License Types
-// Updated: 2025-01-23
+// Simple License Types
+// Updated: 2025-12-24
 Object.defineProperty(exports, "__esModule", { value: true });
